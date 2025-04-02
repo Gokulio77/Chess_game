@@ -3,38 +3,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Global Variables ---
     let scene, camera, renderer, controls;
-    let boardGroup, piecesGroup; // Groups to hold board squares and pieces
+    let boardGroup, piecesGroup; // Groups to hold board and pieces
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    let selectedPiece = null; // Track the currently selected piece
+    let selectedPiece = null; // Track the currently selected piece (the mesh itself)
     let originalPieceMaterial = null; // Store the original material of the selected piece
 
-    const boardSize = 8; // Still useful for piece placement logic
-    const squareSize = 10; // Still useful for piece placement logic
+    const boardSize = 8;
+    const squareSize = 10; // Base size for positioning logic
     const boardDimension = boardSize * squareSize; // Reference dimension
 
     // --- Materials ---
-    const whiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.3 });
-    const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3 });
-    const selectedMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xaaaa00, roughness: 0.4, metalness: 0.1 }); // Highlight material
-    // Default material for loaded board if OBJ doesn't specify/MTL isn't used
-    const boardMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8 });
+    const whiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.3, name: 'whiteMat' });
+    const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3, name: 'blackMat' });
+    const selectedMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xaaaa00, roughness: 0.4, metalness: 0.1, name: 'selectedMat' }); // Highlight material
+    // Default material for loaded board if needed
+    const boardMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8, name: 'boardMat' });
 
     // --- Model Loading ---
     const objLoader = new THREE.OBJLoader();
-    const loadingManager = new THREE.LoadingManager(); // Use manager for overall progress
+    const loadingManager = new THREE.LoadingManager();
     const loadingStatusElement = document.getElementById('loading-status');
-    let modelsToLoad = 32 + 1; // 32 pieces + 1 board
+    let modelsToLoad = 2; // 1 board + 1 pieces file
     let modelsLoaded = 0;
+    let pieceTemplates = {}; // Store loaded piece geometries/meshes by name
 
     loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
-        // This might not be accurate per model with OBJLoader, update manually
-        // console.log(`Loading file: ${url}. Loaded ${itemsLoaded} of ${itemsTotal} files.`);
+        // Update progress manually in modelLoadComplete
     };
 
     loadingManager.onLoad = () => {
-        console.log('All models loaded (or attempted).');
-        if (loadingStatusElement) loadingStatusElement.textContent = 'Models loaded.';
+        console.log('Loading complete (all attempts finished). Placing pieces...');
+        if (loadingStatusElement) loadingStatusElement.textContent = 'Models loaded. Placing pieces...';
+        // Now that both board and pieces *might* be loaded, place the pieces
+        placePiecesFromTemplates();
         // Hide status after a delay
         setTimeout(() => {
             if (loadingStatusElement) loadingStatusElement.style.display = 'none';
@@ -43,20 +45,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadingManager.onError = (url) => {
         console.error(`There was an error loading ${url}`);
-        if (loadingStatusElement) loadingStatusElement.textContent = `Error loading model: ${url}`;
-        // Handle failed load
-        modelLoadComplete(); // Still count it as completed attempt
+        if (loadingStatusElement) loadingStatusElement.textContent = `Error loading: ${url}`;
+        modelLoadComplete(); // Still count attempt
     };
 
-     // Function to update loading progress
+    // Function to update loading progress
     function modelLoadComplete() {
         modelsLoaded++;
         if (loadingStatusElement) {
-           loadingStatusElement.textContent = `Loading board and models... (${modelsLoaded}/${modelsToLoad})`;
+            loadingStatusElement.textContent = `Loading... (${modelsLoaded}/${modelsToLoad})`;
         }
         // Check if all loading attempts are complete (success or error)
         if (modelsLoaded === modelsToLoad) {
-            // Ensure onLoad fires even if individual loads fail fast
+            // Trigger the manager's onLoad now that both attempts are done
              setTimeout(() => loadingManager.onLoad(), 0);
         }
     }
@@ -70,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Camera setup
         const canvas = document.getElementById('chessCanvas');
         camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 1, 1000);
-        camera.position.set(0, boardDimension * 0.8, boardDimension * 1.1); // Adjust initial camera if needed
+        camera.position.set(0, boardDimension * 0.8, boardDimension * 1.1);
         camera.lookAt(0, 0, 0);
 
         // Renderer setup
@@ -109,16 +110,16 @@ document.addEventListener('DOMContentLoaded', () => {
         controls.update();
 
         // Create board and pieces groups
-        boardGroup = new THREE.Group(); // Group to hold the loaded board
+        boardGroup = new THREE.Group();
         piecesGroup = new THREE.Group();
         scene.add(boardGroup);
         scene.add(piecesGroup);
 
         // --- Trigger Loading ---
-        modelsLoaded = 0; // Reset counter before loading starts
-        if (loadingStatusElement) loadingStatusElement.textContent = `Loading board and models... (0/${modelsToLoad})`;
-        createChessboard(); // Load the board model
-        setupInitialPieces(); // Load piece models
+        modelsLoaded = 0; // Reset counter
+        if (loadingStatusElement) loadingStatusElement.textContent = `Loading... (0/${modelsToLoad})`;
+        loadChessboardModel(); // Load the board
+        loadPieceModels(); // Load the single pieces file
 
         // Event Listeners
         window.addEventListener('resize', onWindowResize, false);
@@ -128,82 +129,52 @@ document.addEventListener('DOMContentLoaded', () => {
         animate();
     }
 
-    // --- Chessboard Creation (Loading OBJ) ---
-    function createChessboard() {
-        // --- !!! REPLACE THIS WITH THE ACTUAL URL TO YOUR HOSTED chessboard.obj !!! ---
-        const boardModelUrl = "https://gokulio77.github.io/Chess_game/models/chessboard.obj"; // e.g., "https://yourdomain.com/models/chessboard.obj"
-
+    // --- Chessboard Model Loading ---
+    function loadChessboardModel() {
+        const boardModelUrl = "https://gokulio77.github.io/Chess_game/models/chessboard.obj"; // User provided URL
         console.log(`Attempting to load board model from: ${boardModelUrl}`);
 
-        objLoader.load(
-            boardModelUrl,
-            // onLoad callback
-            (object) => {
+        objLoader.load( boardModelUrl,
+            (object) => { // onLoad
                 console.log("Chessboard model loaded successfully.");
-                // Process the loaded board object
                 object.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
-                        // Apply default material if needed (OBJ might not have materials or MTL not loaded)
+                        // Apply default material if needed
                         if (!child.material || Array.isArray(child.material)) {
                              child.material = boardMaterial;
                         }
-                        child.receiveShadow = true; // Board should receive shadows from pieces
-                        child.castShadow = false; // Board itself doesn't need to cast shadows usually
+                        child.receiveShadow = true;
+                        child.castShadow = false;
                     }
                 });
 
                 // --- CRITICAL ADJUSTMENTS for the BOARD ---
-                // You MUST adjust scale, position, and rotation for your specific model.
-                // Goal: Center the board at world origin (0,0,0) with its top surface at Y=0.
-                //       Scale it appropriately for the pieces (using boardDimension as a reference).
-
-                // Example Adjustments (GUESSWORK - REPLACE WITH YOUR VALUES):
-                const desiredBoardSize = boardDimension; // Target size (e.g., 80x80 if squareSize=10)
-
-                // 1. Calculate current size and center
+                // You MUST adjust these based on your specific model.
+                const desiredBoardSize = boardDimension;
                 const box = new THREE.Box3().setFromObject(object);
-                const center = box.getCenter(new THREE.Vector3());
                 const size = box.getSize(new THREE.Vector3());
+                const scaleFactor = desiredBoardSize / Math.max(size.x, size.z); // Assumes board lies on XZ plane
 
-                // 2. Calculate scale factor (assuming uniform scale is desired)
-                // Use the largest dimension of the loaded model to determine scale factor
-                const maxDim = Math.max(size.x, size.y, size.z);
-                 // Use X or Z size for board scaling, assuming Y is height
-                const scaleFactor = desiredBoardSize / Math.max(size.x, size.z); // Adjust based on your model's dominant plane
-
-                // 3. Apply scale
                 object.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-                // 4. Recalculate bounds after scaling
                 const scaledBox = new THREE.Box3().setFromObject(object);
                 const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-                const scaledSize = scaledBox.getSize(new THREE.Vector3());
 
-                // 5. Adjust position to center and set top at Y=0
-                // Move object so its calculated center goes to origin,
-                // then lift it so its bottom is at -scaledSize.y / 2 (making top at +scaledSize.y / 2)
-                // Adjust Y position so the *top* surface is at Y=0
+                // Adjust position to center and set bottom at Y=0
                 object.position.x = -scaledCenter.x;
-                object.position.y = -scaledBox.min.y; // Move bottom to Y=0
-                // If you want the *center* of the board's height at Y=0 instead:
-                // object.position.y = -scaledCenter.y;
+                object.position.y = -scaledBox.min.y; // Set bottom of the board at Y=0
                 object.position.z = -scaledCenter.z;
 
+                // object.rotation.x = -Math.PI / 2; // Example if needed
 
-                // 6. Adjust rotation if necessary (e.g., if board is upright)
-                // object.rotation.x = -Math.PI / 2; // Example: Rotate if Z-up export
-
-                boardGroup.add(object); // Add the processed board to its group
+                boardGroup.add(object);
                 console.log("Board model processed and added to scene.");
-                 modelLoadComplete(); // Mark board load complete
+                modelLoadComplete();
             },
-            // onProgress
-            undefined, // Use LoadingManager
-            // onError
-            (error) => {
+            undefined, // onProgress
+            (error) => { // onError
                 console.error(`Failed to load chessboard model from: ${boardModelUrl}`, error);
-                if (loadingStatusElement) loadingStatusElement.textContent = `Error loading board!`;
-                // Maybe add a fallback simple plane?
+                // Add fallback plane
                 const fallbackGeo = new THREE.PlaneGeometry(boardDimension, boardDimension);
                 const fallbackMat = new THREE.MeshStandardMaterial({color: 0x888888});
                 const fallbackPlane = new THREE.Mesh(fallbackGeo, fallbackMat);
@@ -211,13 +182,113 @@ document.addEventListener('DOMContentLoaded', () => {
                 fallbackPlane.receiveShadow = true;
                 boardGroup.add(fallbackPlane);
                 console.log("Added fallback plane for board.");
-                modelLoadComplete(); // Mark attempt complete even on error
+                modelLoadComplete();
             }
         );
     }
 
+    // --- Piece Models Loading (Single File) ---
+    function loadPieceModels() {
+        const piecesModelUrl = "https://gokulio77.github.io/Chess_game/models/chess.obj"; // User provided URL
+        console.log(`Attempting to load pieces model from: ${piecesModelUrl}`);
 
-    // --- Piece Placement & Model Loading ---
+        objLoader.load( piecesModelUrl,
+            (object) => { // onLoad
+                console.log("Pieces model file loaded successfully.");
+                // --- ASSUMPTION ---
+                // Assume the loaded 'object' (THREE.Group) contains meshes named like:
+                // 'White_Pawn', 'Black_Pawn', 'White_Rook', 'Black_Knight', 'White_King', etc.
+                // Store these meshes as templates.
+                object.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        console.log(`Found mesh in pieces file: ${child.name}`);
+                        // Store the original mesh as a template
+                        // We will clone these later for actual placement
+                        pieceTemplates[child.name] = child;
+                    }
+                });
+                 console.log("Piece templates extracted:", Object.keys(pieceTemplates));
+                 modelLoadComplete();
+            },
+            undefined, // onProgress
+            (error) => { // onError
+                 console.error(`Failed to load pieces model from: ${piecesModelUrl}`, error);
+                 modelLoadComplete();
+            }
+        );
+    }
+
+    // --- Piece Placement (Using Templates) ---
+    function placePiecesFromTemplates() {
+        if (Object.keys(pieceTemplates).length === 0) {
+            console.error("No piece templates loaded, cannot place pieces.");
+            return;
+        }
+
+        const startingPositions = [
+            // Format: [Type, isWhite, boardX, boardY]
+            // White Back Row
+            ['Rook', true, 0, 0], ['Knight', true, 1, 0], ['Bishop', true, 2, 0], ['Queen', true, 3, 0],
+            ['King', true, 4, 0], ['Bishop', true, 5, 0], ['Knight', true, 6, 0], ['Rook', true, 7, 0],
+            // White Pawns
+            ['Pawn', true, 0, 1], ['Pawn', true, 1, 1], ['Pawn', true, 2, 1], ['Pawn', true, 3, 1],
+            ['Pawn', true, 4, 1], ['Pawn', true, 5, 1], ['Pawn', true, 6, 1], ['Pawn', true, 7, 1],
+            // Black Pawns
+            ['Pawn', false, 0, 6], ['Pawn', false, 1, 6], ['Pawn', false, 2, 6], ['Pawn', false, 3, 6],
+            ['Pawn', false, 4, 6], ['Pawn', false, 5, 6], ['Pawn', false, 6, 6], ['Pawn', false, 7, 6],
+            // Black Back Row
+            ['Rook', false, 0, 7], ['Knight', false, 1, 7], ['Bishop', false, 2, 7], ['Queen', false, 3, 7],
+            ['King', false, 4, 7], ['Bishop', false, 5, 7], ['Knight', false, 6, 7], ['Rook', false, 7, 7],
+        ];
+
+        startingPositions.forEach(([type, isWhite, boardX, boardY]) => {
+            const colorName = isWhite ? 'White' : 'Black';
+            // --- ASSUMPTION: Mesh names in OBJ are like 'White_Pawn', 'Black_Rook' ---
+            // --- You MUST adjust this if your model names differ ---
+            const templateName = `${colorName}_${type}`;
+            const templateMesh = pieceTemplates[templateName];
+
+            if (!templateMesh) {
+                console.warn(`Template mesh not found for name: ${templateName}. Skipping piece at ${boardX},${boardY}`);
+                return;
+            }
+
+            // Clone the template mesh
+            const pieceMesh = templateMesh.clone();
+
+            // Assign correct material
+            pieceMesh.material = isWhite ? whiteMaterial : blackMaterial;
+            pieceMesh.castShadow = true;
+            pieceMesh.receiveShadow = false;
+
+            // --- Piece Adjustments (EXAMPLE - TUNE THESE) ---
+            // You will likely need to adjust scale and potentially rotation/position offset
+            // depending on how the models were exported relative to each other in chess.obj
+            const pieceScaleFactor = 4.0; // EXAMPLE: Adjust scale
+            pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
+            // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Rotate if needed
+
+            // Calculate position
+            const worldPos = getWorldPos(boardX, boardY);
+            const box = new THREE.Box3().setFromObject(pieceMesh); // Use bounding box of scaled clone
+            const size = box.getSize(new THREE.Vector3());
+            pieceMesh.position.set(worldPos.x, size.y / 2, worldPos.z); // Position base approx on board
+
+             // Add user data for identification during clicks
+            pieceMesh.userData = {
+                type: 'piece',
+                pieceType: type,
+                isWhite: isWhite,
+                board_x: boardX,
+                board_y: boardY,
+                name: `${colorName} ${type}` // e.g., "White Pawn"
+            };
+
+            piecesGroup.add(pieceMesh);
+        });
+        console.log("Finished placing pieces from templates.");
+    }
+
 
     // Helper to get world position from board coordinates
     function getWorldPos(boardX, boardY) {
@@ -226,75 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
             z: (boardY * squareSize) - (boardDimension / 2 - squareSize / 2)
         };
     }
-
-    // Function to load a single OBJ model for a PIECE
-    function loadObjPiece(modelUrl, pieceMaterial, pieceUserData, position) {
-        objLoader.load( modelUrl, (object) => {
-                let mesh = null;
-                object.traverse((child) => {
-                    if (child instanceof THREE.Mesh) {
-                        mesh = child;
-                        mesh.material = pieceMaterial;
-                        mesh.castShadow = true;
-                        mesh.receiveShadow = false;
-
-                        // --- Piece Adjustments (EXAMPLE - TUNE THESE) ---
-                        const pieceScaleFactor = 4.0; // Adjust scale relative to board/export size
-                        mesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
-                        // mesh.rotation.y = Math.PI; // Rotate if facing wrong way
-                    }
-                });
-
-                if (mesh) {
-                    const box = new THREE.Box3().setFromObject(mesh);
-                    const size = box.getSize(new THREE.Vector3());
-                    mesh.position.set(position.x, size.y / 2, position.z); // Position base on board
-                    mesh.userData = pieceUserData;
-                    piecesGroup.add(mesh);
-                } else { console.error(`No mesh found in ${modelUrl}`); }
-                modelLoadComplete();
-            },
-            undefined, // onProgress
-            (error) => { console.error(`Error loading piece ${modelUrl}`, error); modelLoadComplete(); }
-        );
-    }
-
-    // Get the URL for a specific piece type (PLACEHOLDERS!)
-    function getModelUrl(type, isWhite) {
-        // --- !!! REPLACE THESE WITH ACTUAL URLS TO YOUR HOSTED MODELS !!! ---
-        const colorPrefix = isWhite ? 'White' : 'Black';
-        switch (type) {
-            // Ensure these paths match where you host your files
-            case 'Pawn':   return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
-            case 'Rook':   return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
-            case 'Knight': return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
-            case 'Bishop': return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
-            case 'Queen':  return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
-            case 'King':   return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
-            default:       console.error("Unknown piece type for model URL:", type); return null;
-        }
-    }
-
-    // Modified function to place pieces by loading models
-    function createAndPlacePiece(type, isWhite, boardX, boardY) {
-        const pieceMaterial = isWhite ? whiteMaterial : blackMaterial;
-        const pieceName = (isWhite ? 'White ' : 'Black ') + type;
-        const modelUrl = getModelUrl(type, isWhite);
-        if (!modelUrl) { modelLoadComplete(); return; } // Skip if no URL
-        const worldPos = getWorldPos(boardX, boardY);
-        const pieceUserData = { type: 'piece', pieceType: type, isWhite: isWhite, board_x: boardX, board_y: boardY, name: pieceName };
-        loadObjPiece(modelUrl, pieceMaterial, pieceUserData, worldPos);
-    }
-
-    // Setup initial pieces by triggering model loads
-    function setupInitialPieces() {
-        const pieceOrder = ['Rook', 'Knight', 'Bishop', 'Queen', 'King', 'Bishop', 'Knight', 'Rook'];
-        // Place white pieces (triggering loads)
-        for (let i = 0; i < boardSize; i++) { createAndPlacePiece('Pawn', true, i, 1); createAndPlacePiece(pieceOrder[i], true, i, 0); }
-        // Place black pieces (triggering loads)
-        for (let i = 0; i < boardSize; i++) { createAndPlacePiece('Pawn', false, i, 6); createAndPlacePiece(pieceOrder[i], false, i, 7); }
-    }
-
 
     // --- Event Handlers ---
     function onWindowResize() {
@@ -315,31 +317,51 @@ document.addEventListener('DOMContentLoaded', () => {
         mouse.x = ((event.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
         mouse.y = -((event.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(piecesGroup.children, true); // Check pieces
+
+        // Intersect with the pieces group (recursive needed for groups from OBJ)
+        const intersects = raycaster.intersectObjects(piecesGroup.children, true);
 
         // Reset previously selected piece material
         if (selectedPiece) {
-             selectedPiece.traverse((child) => { if (child instanceof THREE.Mesh) { child.material = originalPieceMaterial; } });
-            selectedPiece = null; originalPieceMaterial = null;
+            // The selectedPiece is the mesh itself now
+            selectedPiece.material = originalPieceMaterial;
+            selectedPiece = null;
+            originalPieceMaterial = null;
         }
 
         if (intersects.length > 0) {
-            let clickedPieceObject = null;
-            for(let i = 0; i < intersects.length; i++) { // Find parent object with userData
+            // Find the closest intersected object that has our piece user data
+            let clickedMesh = null;
+            for(let i = 0; i < intersects.length; i++) {
                 let obj = intersects[i].object;
-                while(obj && !obj.userData.type) { obj = obj.parent; }
-                if (obj && obj.userData.type === 'piece') { clickedPieceObject = obj; break; }
+                 // Check if the object itself or its parent has the userData
+                 // (depending on how OBJ groups things)
+                 // We assigned userData directly to the cloned mesh.
+                if (obj instanceof THREE.Mesh && obj.userData.type === 'piece') {
+                    clickedMesh = obj;
+                    break; // Found the piece mesh
+                }
+                 // Optional: Check parent if needed, but direct assignment is cleaner
+                 // while(obj.parent && !(obj instanceof THREE.Scene)){
+                 //    if(obj.userData.type === 'piece'){
+                 //       clickedMesh = obj;
+                 //       break;
+                 //    }
+                 //    obj = obj.parent;
+                 // }
+                 // if(clickedMesh) break;
             }
-            if (clickedPieceObject) {
-                selectedPiece = clickedPieceObject;
-                 selectedPiece.traverse((child) => { // Apply highlight
-                     if (child instanceof THREE.Mesh) { originalPieceMaterial = child.material; child.material = selectedMaterial; }
-                 });
+
+            if (clickedMesh) {
+                selectedPiece = clickedMesh; // Store the mesh
+                originalPieceMaterial = selectedPiece.material; // Store original material
+                selectedPiece.material = selectedMaterial; // Highlight selected piece
+
                 console.log("Selected:", selectedPiece.userData.name, "at", selectedPiece.userData.board_x, selectedPiece.userData.board_y);
-                // TODO: Implement move logic
+
+                // TODO: Implement move logic here
             }
         }
-        // else { console.log("Clicked on empty space or board."); } // Clicked off piece
     }
 
 
