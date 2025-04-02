@@ -153,7 +153,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const desiredBoardSize = boardDimension;
                 const box = new THREE.Box3().setFromObject(object);
                 const size = box.getSize(new THREE.Vector3());
-                const scaleFactor = desiredBoardSize / Math.max(size.x, size.z); // Assumes board lies on XZ plane
+                // Handle cases where size might be zero if loading failed or model is empty
+                const maxDim = Math.max(size.x, size.z);
+                const scaleFactor = (maxDim > 0) ? (desiredBoardSize / maxDim) : 1; // Avoid division by zero
 
                 object.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
@@ -195,16 +197,17 @@ document.addEventListener('DOMContentLoaded', () => {
         objLoader.load( piecesModelUrl,
             (object) => { // onLoad
                 console.log("Pieces model file loaded successfully.");
-                // --- ASSUMPTION ---
-                // Assume the loaded 'object' (THREE.Group) contains meshes named like:
-                // 'White_Pawn', 'Black_Pawn', 'White_Rook', 'Black_Knight', 'White_King', etc.
-                // Store these meshes as templates.
+                // Store meshes found in the loaded object as templates, keyed by their name
                 object.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
                         console.log(`Found mesh in pieces file: ${child.name}`);
-                        // Store the original mesh as a template
-                        // We will clone these later for actual placement
-                        pieceTemplates[child.name] = child;
+                        // Ensure mesh names are trimmed of potential whitespace
+                        const meshName = child.name.trim();
+                        if (meshName) { // Only store if name is not empty
+                           pieceTemplates[meshName] = child;
+                        } else {
+                           console.warn("Found mesh with empty name, skipping template storage.");
+                        }
                     }
                 });
                  console.log("Piece templates extracted:", Object.keys(pieceTemplates));
@@ -242,21 +245,30 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
 
         startingPositions.forEach(([type, isWhite, boardX, boardY]) => {
-            const colorName = isWhite ? 'White' : 'Black';
-            // --- ASSUMPTION: Mesh names in OBJ are like 'White_Pawn', 'Black_Rook' ---
-            // --- You MUST adjust this if your model names differ ---
-            const templateName = `${colorName}_${type}`;
+            // --- UPDATED NAMING LOGIC ---
+            // Construct the template name based on the user's pattern:
+            // White: 'PieceType' (e.g., 'Queen')
+            // Black: 'PieceType.001' (e.g., 'Queen.001')
+            let templateName;
+            if (isWhite) {
+                templateName = type; // e.g., 'Pawn', 'Rook', 'King'
+            } else {
+                templateName = `${type}.001`; // e.g., 'Pawn.001', 'Rook.001', 'King.001'
+            }
+            // --- END UPDATED NAMING LOGIC ---
+
             const templateMesh = pieceTemplates[templateName];
 
             if (!templateMesh) {
-                console.warn(`Template mesh not found for name: ${templateName}. Skipping piece at ${boardX},${boardY}`);
-                return;
+                // Log a warning if a specific template wasn't found in the loaded file
+                console.warn(`Template mesh not found for expected name: "${templateName}". Skipping piece at ${boardX},${boardY}`);
+                return; // Skip placing this piece
             }
 
-            // Clone the template mesh
+            // Clone the template mesh to create an instance
             const pieceMesh = templateMesh.clone();
 
-            // Assign correct material
+            // Assign correct material (White or Black)
             pieceMesh.material = isWhite ? whiteMaterial : blackMaterial;
             pieceMesh.castShadow = true;
             pieceMesh.receiveShadow = false;
@@ -264,15 +276,19 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- Piece Adjustments (EXAMPLE - TUNE THESE) ---
             // You will likely need to adjust scale and potentially rotation/position offset
             // depending on how the models were exported relative to each other in chess.obj
-            const pieceScaleFactor = 4.0; // EXAMPLE: Adjust scale
+            const pieceScaleFactor = 4.0; // EXAMPLE: Adjust scale - Make this match your models!
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
             // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Rotate if needed
 
-            // Calculate position
+            // Calculate world position on the board
             const worldPos = getWorldPos(boardX, boardY);
-            const box = new THREE.Box3().setFromObject(pieceMesh); // Use bounding box of scaled clone
+
+            // Calculate bounding box AFTER scaling to position correctly
+            const box = new THREE.Box3().setFromObject(pieceMesh);
             const size = box.getSize(new THREE.Vector3());
-            pieceMesh.position.set(worldPos.x, size.y / 2, worldPos.z); // Position base approx on board
+            // Position the piece so its base is approximately on the board (Y=0)
+            pieceMesh.position.set(worldPos.x, size.y / 2 - (size.y / 2 + box.min.y), worldPos.z); // Adjust Y based on bottom of bounding box
+
 
              // Add user data for identification during clicks
             pieceMesh.userData = {
@@ -281,9 +297,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 isWhite: isWhite,
                 board_x: boardX,
                 board_y: boardY,
-                name: `${colorName} ${type}` // e.g., "White Pawn"
+                name: `${isWhite ? 'White' : 'Black'} ${type}` // e.g., "White Pawn"
             };
 
+            // Add the fully prepared piece instance to the pieces group
             piecesGroup.add(pieceMesh);
         });
         console.log("Finished placing pieces from templates.");
@@ -334,22 +351,11 @@ document.addEventListener('DOMContentLoaded', () => {
             let clickedMesh = null;
             for(let i = 0; i < intersects.length; i++) {
                 let obj = intersects[i].object;
-                 // Check if the object itself or its parent has the userData
-                 // (depending on how OBJ groups things)
                  // We assigned userData directly to the cloned mesh.
                 if (obj instanceof THREE.Mesh && obj.userData.type === 'piece') {
                     clickedMesh = obj;
                     break; // Found the piece mesh
                 }
-                 // Optional: Check parent if needed, but direct assignment is cleaner
-                 // while(obj.parent && !(obj instanceof THREE.Scene)){
-                 //    if(obj.userData.type === 'piece'){
-                 //       clickedMesh = obj;
-                 //       break;
-                 //    }
-                 //    obj = obj.parent;
-                 // }
-                 // if(clickedMesh) break;
             }
 
             if (clickedMesh) {
