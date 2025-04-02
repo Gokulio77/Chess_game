@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Chessboard Creation (Loading OBJ) ---
     function createChessboard() {
         // --- !!! REPLACE THIS WITH THE ACTUAL URL TO YOUR HOSTED chessboard.obj !!! ---
-        const boardModelUrl = "https://gokulio77.github.io/Chess_game/"; // e.g., "https://yourdomain.com/models/chessboard.obj"
+        const boardModelUrl = "https://gokulio77.github.io/Chess_game/models/chessboard.obj"; // e.g., "https://yourdomain.com/models/chessboard.obj"
 
         console.log(`Attempting to load board model from: ${boardModelUrl}`);
 
@@ -265,12 +265,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const colorPrefix = isWhite ? 'White' : 'Black';
         switch (type) {
             // Ensure these paths match where you host your files
-            case 'Pawn':   return `https://gokulio77.github.io/Chess_game/`;
-            case 'Rook':   return `https://gokulio77.github.io/Chess_game/`;
-            case 'Knight': return `https://gokulio77.github.io/Chess_game/`;
-            case 'Bishop': return `https://gokulio77.github.io/Chess_game/`;
-            case 'Queen':  return `https://gokulio77.github.io/Chess_game/`;
-            case 'King':   return `https://gokulio77.github.io/Chess_game/`;
+            case 'Pawn':   return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
+            case 'Rook':   return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
+            case 'Knight': return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
+            case 'Bishop': return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
+            case 'Queen':  return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
+            case 'King':   return `https://gokulio77.github.io/Chess_game/models/chess.obj`;
             default:       console.error("Unknown piece type for model URL:", type); return null;
         }
     }
