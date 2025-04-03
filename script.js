@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const scaledBox = new THREE.Box3().setFromObject(object);
                 const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
                 object.position.x = -scaledCenter.x;
-                object.position.y = -scaledBox.min.y;
+                object.position.y = -scaledBox.min.y; // Set bottom of the board at Y=0
                 object.position.z = -scaledCenter.z;
                 // --- End Board Adjustments ---
                 boardGroup.add(object);
@@ -203,25 +203,32 @@ document.addEventListener('DOMContentLoaded', () => {
             pieceMesh.castShadow = true;
             pieceMesh.receiveShadow = false;
 
-            // --- ADJUSTED PIECE SCALE ---
-            // Increased scale factor based on previous logs showing pieces were too small.
-            // THIS IS STILL A GUESS! You likely need to tune this value further.
-            // Try different values (e.g., 20, 30, 50, 60) until pieces look reasonably sized.
-            const pieceScaleFactor = 40.0; // Increased significantly from 4.0
-            // --- END ADJUSTED PIECE SCALE ---
+            // --- Piece Scale Adjustment ---
+            // This scale factor likely needs tuning based on your specific models.
+            const pieceScaleFactor = 40.0; // Keep adjusting this value!
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
             // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment/adjust if needed
 
             const worldPos = getWorldPos(boardX, boardY);
 
-            // --- Simplified Y-Positioning (Keep for now) ---
-            pieceMesh.position.set(worldPos.x, 0, worldPos.z);
+            // --- UPDATED Y-Positioning using Bounding Box ---
+            // Calculate bounding box AFTER scaling
+            const box = new THREE.Box3().setFromObject(pieceMesh);
+            // Calculate the offset needed to lift the piece so its bottom is at Y=0
+            // box.min.y is the lowest point of the mesh relative to its origin.
+            // If origin is at the base, min.y is 0. If origin is centered, min.y is negative.
+            // We want to lift the piece by the negative of its lowest point.
+            const yPositionOffset = -box.min.y;
+            pieceMesh.position.set(worldPos.x, yPositionOffset, worldPos.z);
+            // --- End UPDATED Y-Positioning ---
+
 
             // --- Logging for Debugging ---
-            const box = new THREE.Box3().setFromObject(pieceMesh);
-            const size = box.getSize(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3()); // Get size from the same box
             console.log(`  - Scale Applied: ${pieceScaleFactor}`);
-            console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`); // Check if size is larger now
+            console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`);
+            // Log the calculated Y offset and final position
+            console.log(`  - BBox Min Y: ${box.min.y.toFixed(2)}, Calculated Y Offset: ${yPositionOffset.toFixed(2)}`);
             console.log(`  - Final Position: x=${pieceMesh.position.x.toFixed(2)}, y=${pieceMesh.position.y.toFixed(2)}, z=${pieceMesh.position.z.toFixed(2)}`);
             // --- End Logging ---
 
