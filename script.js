@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const box = new THREE.Box3().setFromObject(pieceMesh);
             const yPositionOffset = -box.min.y;
             // Increase this value to lift pieces higher, decrease if they float too much.
-            const manualLift = 9.0; // <-- Increased lift from 0.5
+            const manualLift = 7.0; // <-- Increased lift from 0.5
             pieceMesh.position.set(worldPos.x, yPositionOffset + manualLift, worldPos.z);
             // --- End Y-Positioning ---
 
