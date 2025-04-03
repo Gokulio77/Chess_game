@@ -204,29 +204,25 @@ document.addEventListener('DOMContentLoaded', () => {
             pieceMesh.receiveShadow = false;
 
             // --- Piece Scale Adjustment ---
-            // This scale factor likely needs tuning based on your specific models.
-            const pieceScaleFactor = 28.0; // Current scale
+            const pieceScaleFactor = 28.0; // Current scale (Reduced by 30% previously)
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
             // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment/adjust if needed
 
             const worldPos = getWorldPos(boardX, boardY);
 
             // --- Y-Positioning using Bounding Box + Manual Offset ---
-            // Calculate bounding box AFTER scaling
             const box = new THREE.Box3().setFromObject(pieceMesh);
-            // Calculate the offset needed to lift the piece so its bottom is at Y=0
             const yPositionOffset = -box.min.y;
-            // Add a small manual offset to lift the piece slightly higher
-            const manualLift = 0.5; // <-- ADJUST THIS VALUE if pieces are still too low or too high
+            // Increase this value to lift pieces higher, decrease if they float too much.
+            const manualLift = 2.0; // <-- Increased lift from 0.5
             pieceMesh.position.set(worldPos.x, yPositionOffset + manualLift, worldPos.z);
             // --- End Y-Positioning ---
 
 
             // --- Logging for Debugging ---
-            const size = box.getSize(new THREE.Vector3()); // Get size from the same box
+            const size = box.getSize(new THREE.Vector3());
             console.log(`  - Scale Applied: ${pieceScaleFactor}`);
             console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`);
-            // Log the calculated offset and final position
             console.log(`  - BBox Min Y: ${box.min.y.toFixed(2)}, Calculated Y Offset: ${yPositionOffset.toFixed(2)}, Manual Lift: ${manualLift}`);
             console.log(`  - Final Position: x=${pieceMesh.position.x.toFixed(2)}, y=${pieceMesh.position.y.toFixed(2)}, z=${pieceMesh.position.z.toFixed(2)}`);
             // --- End Logging ---
