@@ -203,31 +203,30 @@ document.addEventListener('DOMContentLoaded', () => {
             pieceMesh.castShadow = true;
             pieceMesh.receiveShadow = false;
 
-            // --- Piece Scale Adjustment ---
-            // This scale factor likely needs tuning based on your specific models.
-            const pieceScaleFactor = 40.0; // Keep adjusting this value!
+            // --- ADJUSTED PIECE SCALE ---
+            // Reduced scale by 30% from 40.0.
+            // You may still need to tune this value further!
+            const pieceScaleFactor = 28.0; // Changed from 40.0
+            // --- END ADJUSTED PIECE SCALE ---
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
             // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment/adjust if needed
 
             const worldPos = getWorldPos(boardX, boardY);
 
-            // --- UPDATED Y-Positioning using Bounding Box ---
+            // --- Y-Positioning using Bounding Box ---
             // Calculate bounding box AFTER scaling
             const box = new THREE.Box3().setFromObject(pieceMesh);
             // Calculate the offset needed to lift the piece so its bottom is at Y=0
-            // box.min.y is the lowest point of the mesh relative to its origin.
-            // If origin is at the base, min.y is 0. If origin is centered, min.y is negative.
-            // We want to lift the piece by the negative of its lowest point.
             const yPositionOffset = -box.min.y;
             pieceMesh.position.set(worldPos.x, yPositionOffset, worldPos.z);
-            // --- End UPDATED Y-Positioning ---
+            // --- End Y-Positioning ---
 
 
             // --- Logging for Debugging ---
             const size = box.getSize(new THREE.Vector3()); // Get size from the same box
             console.log(`  - Scale Applied: ${pieceScaleFactor}`);
             console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`);
-            // Log the calculated Y offset and final position
+            // Log the calculated offset and final position
             console.log(`  - BBox Min Y: ${box.min.y.toFixed(2)}, Calculated Y Offset: ${yPositionOffset.toFixed(2)}`);
             console.log(`  - Final Position: x=${pieceMesh.position.x.toFixed(2)}, y=${pieceMesh.position.y.toFixed(2)}, z=${pieceMesh.position.z.toFixed(2)}`);
             // --- End Logging ---
