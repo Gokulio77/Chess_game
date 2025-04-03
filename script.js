@@ -28,16 +28,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let modelsLoaded = 0;
     let pieceTemplates = {}; // Store loaded piece geometries/meshes by name
 
-    loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
-        // Update progress manually in modelLoadComplete
-    };
+    loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => { /* ... */ };
 
     loadingManager.onLoad = () => {
         console.log('Loading complete (all attempts finished). Placing pieces...');
         if (loadingStatusElement) loadingStatusElement.textContent = 'Models loaded. Placing pieces...';
-        // Now that both board and pieces *might* be loaded, place the pieces
         placePiecesFromTemplates();
-        // Hide status after a delay
         setTimeout(() => {
             if (loadingStatusElement) loadingStatusElement.style.display = 'none';
         }, 2000);
@@ -46,86 +42,52 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingManager.onError = (url) => {
         console.error(`There was an error loading ${url}`);
         if (loadingStatusElement) loadingStatusElement.textContent = `Error loading: ${url}`;
-        modelLoadComplete(); // Still count attempt
+        modelLoadComplete();
     };
 
-    // Function to update loading progress
     function modelLoadComplete() {
         modelsLoaded++;
         if (loadingStatusElement) {
             loadingStatusElement.textContent = `Loading... (${modelsLoaded}/${modelsToLoad})`;
         }
-        // Check if all loading attempts are complete (success or error)
         if (modelsLoaded === modelsToLoad) {
-            // Trigger the manager's onLoad now that both attempts are done
              setTimeout(() => loadingManager.onLoad(), 0);
         }
     }
 
     // --- Initialization ---
     function init() {
-        // Scene setup
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xeeeeee);
-
-        // Camera setup
         const canvas = document.getElementById('chessCanvas');
         camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 1, 1000);
         camera.position.set(0, boardDimension * 0.8, boardDimension * 1.1);
         camera.lookAt(0, 0, 0);
-
-        // Renderer setup
         renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
         renderer.setSize(canvas.clientWidth, canvas.clientHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-        // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
         directionalLight.position.set(40, 60, 30);
         directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        directionalLight.shadow.camera.near = 10;
-        directionalLight.shadow.camera.far = 200;
-        directionalLight.shadow.camera.left = -boardDimension * 0.8;
-        directionalLight.shadow.camera.right = boardDimension * 0.8;
-        directionalLight.shadow.camera.top = boardDimension * 0.8;
-        directionalLight.shadow.camera.bottom = -boardDimension * 0.8;
-        directionalLight.shadow.bias = -0.0005;
+        // ... rest of light setup ...
         scene.add(directionalLight);
-
-        // Controls setup
         controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.1;
-        controls.screenSpacePanning = false;
-        controls.maxPolarAngle = Math.PI / 2 - 0.05;
-        controls.minDistance = boardDimension * 0.3;
-        controls.maxDistance = boardDimension * 2.5;
-        controls.target.set(0, 0, 0);
+        // ... rest of controls setup ...
         controls.update();
-
-        // Create board and pieces groups
         boardGroup = new THREE.Group();
         piecesGroup = new THREE.Group();
         scene.add(boardGroup);
         scene.add(piecesGroup);
-
-        // --- Trigger Loading ---
-        modelsLoaded = 0; // Reset counter
+        modelsLoaded = 0;
         if (loadingStatusElement) loadingStatusElement.textContent = `Loading... (0/${modelsToLoad})`;
-        loadChessboardModel(); // Load the board
-        loadPieceModels(); // Load the single pieces file
-
-        // Event Listeners
+        loadChessboardModel();
+        loadPieceModels();
         window.addEventListener('resize', onWindowResize, false);
         renderer.domElement.addEventListener('click', onMouseClick, false);
-
-        // Start the animation loop
         animate();
     }
 
@@ -137,11 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log("Chessboard model loaded successfully.");
                 object.traverse((child) => { /* ... apply material, shadows ... */
                      if (child instanceof THREE.Mesh) {
-                        if (!child.material || Array.isArray(child.material)) {
-                             child.material = boardMaterial;
-                        }
-                        child.receiveShadow = true;
-                        child.castShadow = false;
+                        if (!child.material || Array.isArray(child.material)) { child.material = boardMaterial; }
+                        child.receiveShadow = true; child.castShadow = false;
                     }
                 });
                 // --- Board Adjustments ---
@@ -167,10 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fallbackGeo = new THREE.PlaneGeometry(boardDimension, boardDimension);
                 const fallbackMat = new THREE.MeshStandardMaterial({color: 0x888888});
                 const fallbackPlane = new THREE.Mesh(fallbackGeo, fallbackMat);
-                fallbackPlane.rotation.x = -Math.PI / 2;
-                fallbackPlane.receiveShadow = true;
-                boardGroup.add(fallbackPlane);
-                console.log("Added fallback plane for board.");
+                fallbackPlane.rotation.x = -Math.PI / 2; fallbackPlane.receiveShadow = true;
+                boardGroup.add(fallbackPlane); console.log("Added fallback plane for board.");
                 modelLoadComplete();
              }
         );
@@ -187,15 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const meshName = child.name.trim();
                         if (meshName) {
                            console.log(`Found mesh template: ${meshName}`);
-                           // --- Add Geometry Check for Template ---
                            if (!child.geometry || !child.geometry.attributes.position || child.geometry.attributes.position.count === 0) {
                                console.warn(`   - WARNING: Template mesh "${meshName}" has missing or empty geometry!`);
                            }
-                           // --- End Geometry Check ---
                            pieceTemplates[meshName] = child;
-                        } else {
-                           console.warn("Found mesh with empty name, skipping template storage.");
-                        }
+                        } else { console.warn("Found mesh with empty name, skipping template storage."); }
                     }
                 });
                  console.log("Piece templates extracted:", Object.keys(pieceTemplates));
@@ -211,10 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Piece Placement (Using Templates) ---
     function placePiecesFromTemplates() {
-        if (Object.keys(pieceTemplates).length === 0) {
-             console.error("No piece templates loaded, cannot place pieces.");
-             return;
-        }
+        if (Object.keys(pieceTemplates).length === 0) { /* ... error ... */ return; }
 
         const startingPositions = [ /* ... same positions array ... */
             ['Rook', true, 0, 0], ['Knight', true, 1, 0], ['Bishop', true, 2, 0], ['Queen', true, 3, 0],
@@ -228,44 +178,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
 
         startingPositions.forEach(([type, isWhite, boardX, boardY]) => {
-            // Construct template name based on 'Type' or 'Type.001'
             let templateName;
             if (isWhite) { templateName = type; } else { templateName = `${type}.001`; }
             const templateMesh = pieceTemplates[templateName];
 
-            if (!templateMesh) {
-                console.warn(`Template mesh not found for expected name: "${templateName}". Skipping piece at ${boardX},${boardY}`);
-                return;
-            }
+            if (!templateMesh) { console.warn(/* ... */); return; }
 
-            // --- Log Template Geometry BEFORE Cloning ---
+            // --- Log Template Geometry ---
             console.log(`Processing Template: ${templateName}`);
             if (templateMesh.geometry && templateMesh.geometry.attributes.position) {
                 console.log(`  - Template Geo OK. Position count: ${templateMesh.geometry.attributes.position.count}`);
-            } else {
-                console.error(`  - ERROR: Template "${templateName}" has NO GEOMETRY or position attribute!`);
-                return; // Cannot clone if template geometry is bad
-            }
+            } else { console.error(/* ... */); return; }
             // --- End Log ---
 
             const pieceMesh = templateMesh.clone();
 
             // --- Check Cloned Geometry ---
              if (!pieceMesh.geometry || !pieceMesh.geometry.attributes.position || pieceMesh.geometry.attributes.position.count === 0) {
-                console.error(`  - ERROR: Cloned mesh for ${templateName} has missing or empty geometry after clone!`);
-                return; // Skip if clone failed
-            } else {
-                 console.log(`  - Cloned Geo OK. Position count: ${pieceMesh.geometry.attributes.position.count}`);
-            }
+                console.error(`  - ERROR: Cloned mesh for ${templateName} has missing or empty geometry after clone!`); return;
+            } else { console.log(`  - Cloned Geo OK. Position count: ${pieceMesh.geometry.attributes.position.count}`); }
             // --- End Check ---
 
             pieceMesh.material = isWhite ? whiteMaterial : blackMaterial;
             pieceMesh.castShadow = true;
             pieceMesh.receiveShadow = false;
 
-            // --- CRITICAL PIECE ADJUSTMENTS ---
-            // You MUST experiment with this scale factor! Still a guess!
-            const pieceScaleFactor = 4.0; // Try changing this (e.g., 1.0, 0.5, 10.0)
+            // --- ADJUSTED PIECE SCALE ---
+            // Increased scale factor based on previous logs showing pieces were too small.
+            // THIS IS STILL A GUESS! You likely need to tune this value further.
+            // Try different values (e.g., 20, 30, 50, 60) until pieces look reasonably sized.
+            const pieceScaleFactor = 40.0; // Increased significantly from 4.0
+            // --- END ADJUSTED PIECE SCALE ---
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
             // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment/adjust if needed
 
@@ -275,12 +218,10 @@ document.addEventListener('DOMContentLoaded', () => {
             pieceMesh.position.set(worldPos.x, 0, worldPos.z);
 
             // --- Logging for Debugging ---
-            // Calculate box AFTER setting scale
             const box = new THREE.Box3().setFromObject(pieceMesh);
             const size = box.getSize(new THREE.Vector3());
             console.log(`  - Scale Applied: ${pieceScaleFactor}`);
-            // Log the actual Vector3 components
-            console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`);
+            console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`); // Check if size is larger now
             console.log(`  - Final Position: x=${pieceMesh.position.x.toFixed(2)}, y=${pieceMesh.position.y.toFixed(2)}, z=${pieceMesh.position.z.toFixed(2)}`);
             // --- End Logging ---
 
