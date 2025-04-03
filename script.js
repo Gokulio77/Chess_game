@@ -133,12 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadChessboardModel() {
         const boardModelUrl = "https://gokulio77.github.io/Chess_game/models/chessboard.obj"; // User provided URL
         console.log(`Attempting to load board model from: ${boardModelUrl}`);
-
-        objLoader.load( boardModelUrl,
-            (object) => { // onLoad
+        objLoader.load( boardModelUrl, (object) => {
                 console.log("Chessboard model loaded successfully.");
-                object.traverse((child) => {
-                    if (child instanceof THREE.Mesh) {
+                object.traverse((child) => { /* ... apply material, shadows ... */
+                     if (child instanceof THREE.Mesh) {
                         if (!child.material || Array.isArray(child.material)) {
                              child.material = boardMaterial;
                         }
@@ -146,30 +144,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         child.castShadow = false;
                     }
                 });
-
-                // --- CRITICAL ADJUSTMENTS for the BOARD ---
-                // You MUST adjust these based on your specific model.
+                // --- Board Adjustments ---
                 const desiredBoardSize = boardDimension;
                 const box = new THREE.Box3().setFromObject(object);
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.z);
                 const scaleFactor = (maxDim > 0) ? (desiredBoardSize / maxDim) : 1;
-
                 object.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
                 const scaledBox = new THREE.Box3().setFromObject(object);
                 const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-
                 object.position.x = -scaledCenter.x;
-                object.position.y = -scaledBox.min.y; // Set bottom of the board at Y=0
+                object.position.y = -scaledBox.min.y;
                 object.position.z = -scaledCenter.z;
-
+                // --- End Board Adjustments ---
                 boardGroup.add(object);
                 console.log("Board model processed and added to scene.");
                 modelLoadComplete();
             },
-            undefined, // onProgress
-            (error) => { // onError
+            undefined,
+            (error) => { /* ... error handling ... */
                 console.error(`Failed to load chessboard model from: ${boardModelUrl}`, error);
                 const fallbackGeo = new THREE.PlaneGeometry(boardDimension, boardDimension);
                 const fallbackMat = new THREE.MeshStandardMaterial({color: 0x888888});
@@ -179,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 boardGroup.add(fallbackPlane);
                 console.log("Added fallback plane for board.");
                 modelLoadComplete();
-            }
+             }
         );
     }
 
@@ -187,15 +180,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadPieceModels() {
         const piecesModelUrl = "https://gokulio77.github.io/Chess_game/models/chess.obj"; // User provided URL
         console.log(`Attempting to load pieces model from: ${piecesModelUrl}`);
-
-        objLoader.load( piecesModelUrl,
-            (object) => { // onLoad
+        objLoader.load( piecesModelUrl, (object) => {
                 console.log("Pieces model file loaded successfully.");
                 object.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
                         const meshName = child.name.trim();
                         if (meshName) {
                            console.log(`Found mesh template: ${meshName}`);
+                           // --- Add Geometry Check for Template ---
+                           if (!child.geometry || !child.geometry.attributes.position || child.geometry.attributes.position.count === 0) {
+                               console.warn(`   - WARNING: Template mesh "${meshName}" has missing or empty geometry!`);
+                           }
+                           // --- End Geometry Check ---
                            pieceTemplates[meshName] = child;
                         } else {
                            console.warn("Found mesh with empty name, skipping template storage.");
@@ -205,23 +201,22 @@ document.addEventListener('DOMContentLoaded', () => {
                  console.log("Piece templates extracted:", Object.keys(pieceTemplates));
                  modelLoadComplete();
             },
-            undefined, // onProgress
-            (error) => { // onError
+            undefined,
+            (error) => { /* ... error handling ... */
                  console.error(`Failed to load pieces model from: ${piecesModelUrl}`, error);
                  modelLoadComplete();
-            }
+             }
         );
     }
 
     // --- Piece Placement (Using Templates) ---
     function placePiecesFromTemplates() {
         if (Object.keys(pieceTemplates).length === 0) {
-            console.error("No piece templates loaded, cannot place pieces.");
-            return;
+             console.error("No piece templates loaded, cannot place pieces.");
+             return;
         }
 
-        const startingPositions = [
-            // Format: [Type, isWhite, boardX, boardY]
+        const startingPositions = [ /* ... same positions array ... */
             ['Rook', true, 0, 0], ['Knight', true, 1, 0], ['Bishop', true, 2, 0], ['Queen', true, 3, 0],
             ['King', true, 4, 0], ['Bishop', true, 5, 0], ['Knight', true, 6, 0], ['Rook', true, 7, 0],
             ['Pawn', true, 0, 1], ['Pawn', true, 1, 1], ['Pawn', true, 2, 1], ['Pawn', true, 3, 1],
@@ -235,12 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startingPositions.forEach(([type, isWhite, boardX, boardY]) => {
             // Construct template name based on 'Type' or 'Type.001'
             let templateName;
-            if (isWhite) {
-                templateName = type;
-            } else {
-                templateName = `${type}.001`;
-            }
-
+            if (isWhite) { templateName = type; } else { templateName = `${type}.001`; }
             const templateMesh = pieceTemplates[templateName];
 
             if (!templateMesh) {
@@ -248,39 +238,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // --- Log Template Geometry BEFORE Cloning ---
+            console.log(`Processing Template: ${templateName}`);
+            if (templateMesh.geometry && templateMesh.geometry.attributes.position) {
+                console.log(`  - Template Geo OK. Position count: ${templateMesh.geometry.attributes.position.count}`);
+            } else {
+                console.error(`  - ERROR: Template "${templateName}" has NO GEOMETRY or position attribute!`);
+                return; // Cannot clone if template geometry is bad
+            }
+            // --- End Log ---
+
             const pieceMesh = templateMesh.clone();
+
+            // --- Check Cloned Geometry ---
+             if (!pieceMesh.geometry || !pieceMesh.geometry.attributes.position || pieceMesh.geometry.attributes.position.count === 0) {
+                console.error(`  - ERROR: Cloned mesh for ${templateName} has missing or empty geometry after clone!`);
+                return; // Skip if clone failed
+            } else {
+                 console.log(`  - Cloned Geo OK. Position count: ${pieceMesh.geometry.attributes.position.count}`);
+            }
+            // --- End Check ---
+
             pieceMesh.material = isWhite ? whiteMaterial : blackMaterial;
             pieceMesh.castShadow = true;
             pieceMesh.receiveShadow = false;
 
             // --- CRITICAL PIECE ADJUSTMENTS ---
-            // You MUST experiment with this scale factor!
-            const pieceScaleFactor = 4.0; // Start with 4.0, but try 1.0, 10.0, 0.5 etc.
+            // You MUST experiment with this scale factor! Still a guess!
+            const pieceScaleFactor = 4.0; // Try changing this (e.g., 1.0, 0.5, 10.0)
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
-            // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment and adjust if pieces face wrong way
+            // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment/adjust if needed
 
             const worldPos = getWorldPos(boardX, boardY);
 
-            // --- Simplified Y-Positioning ---
-            // Place the piece's *origin* at Y=0 on the board square.
-            // This is simpler for debugging. You might need to adjust the model's origin in Blender
-            // or use the bounding box calculation later if the origin isn't at the base.
+            // --- Simplified Y-Positioning (Keep for now) ---
             pieceMesh.position.set(worldPos.x, 0, worldPos.z);
-            // --- End Simplified Y-Positioning ---
-
 
             // --- Logging for Debugging ---
+            // Calculate box AFTER setting scale
             const box = new THREE.Box3().setFromObject(pieceMesh);
             const size = box.getSize(new THREE.Vector3());
-            console.log(`Placing ${isWhite ? 'White' : 'Black'} ${type}:`);
-            console.log(`  - Template: ${templateName}`);
             console.log(`  - Scale Applied: ${pieceScaleFactor}`);
-            console.log(`  - Calculated Size:`, size); // Check if size looks reasonable in console
-            console.log(`  - Final Position:`, pieceMesh.position); // Check if X/Z look right
+            // Log the actual Vector3 components
+            console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`);
+            console.log(`  - Final Position: x=${pieceMesh.position.x.toFixed(2)}, y=${pieceMesh.position.y.toFixed(2)}, z=${pieceMesh.position.z.toFixed(2)}`);
             // --- End Logging ---
 
-
-            // Add user data
             pieceMesh.userData = {
                 type: 'piece', pieceType: type, isWhite: isWhite,
                 board_x: boardX, board_y: boardY,
@@ -292,17 +295,13 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Finished placing pieces from templates.");
     }
 
-
-    // Helper to get world position from board coordinates
-    function getWorldPos(boardX, boardY) {
+    function getWorldPos(boardX, boardY) { /* ... same ... */
          return {
             x: (boardX * squareSize) - (boardDimension / 2 - squareSize / 2),
             z: (boardY * squareSize) - (boardDimension / 2 - squareSize / 2)
         };
     }
-
-    // --- Event Handlers ---
-    function onWindowResize() {
+    function onWindowResize() { /* ... same ... */
         const canvas = document.getElementById('chessCanvas');
         const container = document.getElementById('container');
         const containerStyle = window.getComputedStyle(container);
@@ -314,8 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
     }
-
-     function onMouseClick(event) {
+    function onMouseClick(event) { /* ... same ... */
         const canvasBounds = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
         mouse.y = -((event.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
@@ -342,17 +340,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log("Selected:", selectedPiece.userData.name, "at", selectedPiece.userData.board_x, selectedPiece.userData.board_y);
             }
         }
-    }
-
-    // --- Animation Loop ---
-    function animate() {
+     }
+    function animate() { /* ... same ... */
         requestAnimationFrame(animate);
         controls.update();
         renderer.render(scene, camera);
-    }
+     }
 
-    // --- Start the application ---
     init();
-    onWindowResize(); // Initial resize call
+    onWindowResize();
 
-}); // End DOMContentLoaded listener
+});
