@@ -10,14 +10,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalPieceMaterial = null; // Store the original material of the selected piece
 
     const boardSize = 8;
-    const squareSize = 10; // Base size for positioning logic
+    // Keep squareSize consistent if board looks right
+    const squareSize = 10.0; // Base size for positioning logic.
     const boardDimension = boardSize * squareSize; // Reference dimension
 
     // --- Materials ---
     const whiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.3, name: 'whiteMat' });
     const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3, name: 'blackMat' });
     const selectedMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xaaaa00, roughness: 0.4, metalness: 0.1, name: 'selectedMat' }); // Highlight material
-    // Default material for loaded board if needed
     const boardMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8, name: 'boardMat' });
 
     // --- Model Loading ---
@@ -116,7 +116,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 object.position.y = -scaledBox.min.y; // Set bottom of the board at Y=0
                 object.position.z = -scaledCenter.z;
                 // --- End Board Adjustments ---
-                boardGroup.add(object);
+
+                boardGroup.add(object); // Add to group *before* final check
+
+                // --- Log Final Board State ---
+                const finalBox = new THREE.Box3().setFromObject(boardGroup); // Measure the whole group
+                const finalSize = finalBox.getSize(new THREE.Vector3());
+                const finalCenter = finalBox.getCenter(new THREE.Vector3());
+                console.log("--- Board Final State ---");
+                console.log(`Target Dimension: ${desiredBoardSize.toFixed(2)}`);
+                console.log(`Final Calculated Size: x=${finalSize.x.toFixed(2)}, y=${finalSize.y.toFixed(2)}, z=${finalSize.z.toFixed(2)}`);
+                console.log(`Final Calculated Center: x=${finalCenter.x.toFixed(2)}, y=${finalCenter.y.toFixed(2)}, z=${finalCenter.z.toFixed(2)}`);
+                console.log(`Final Position in Scene: x=${boardGroup.position.x.toFixed(2)}, y=${boardGroup.position.y.toFixed(2)}, z=${boardGroup.position.z.toFixed(2)}`);
+                console.log("-------------------------");
+                // --- END LOG ---
+
                 console.log("Board model processed and added to scene.");
                 modelLoadComplete();
             },
@@ -204,19 +218,30 @@ document.addEventListener('DOMContentLoaded', () => {
             pieceMesh.receiveShadow = false;
 
             // --- Piece Scale Adjustment ---
-            const pieceScaleFactor = 28.0; // Current scale (Reduced by 30% previously)
+            const pieceScaleFactor = 28.0; // Current scale
             pieceMesh.scale.set(pieceScaleFactor, pieceScaleFactor, pieceScaleFactor);
-            // pieceMesh.rotation.y = Math.PI; // EXAMPLE: Uncomment/adjust if needed
+            // pieceMesh.rotation.y = Math.PI;
 
             const worldPos = getWorldPos(boardX, boardY);
 
-            // --- Y-Positioning using Bounding Box + Manual Offset ---
+            // --- Positioning with Manual X/Z Offset ---
             const box = new THREE.Box3().setFromObject(pieceMesh);
-            const yPositionOffset = -box.min.y;
-            // Increase this value to lift pieces higher, decrease if they float too much.
-            const manualLift = 6.0; // <-- Increased lift from 0.5
-            pieceMesh.position.set(worldPos.x, yPositionOffset + manualLift, worldPos.z);
-            // --- End Y-Positioning ---
+            const yPositionOffset = -box.min.y; // Base Y position from bounding box
+            const manualLift = 2.0; // Keep Y lift consistent for now
+
+            // --- NEW: Manual X/Z Offsets ---
+            // Adjust these values slightly if pieces are not centered on their squares
+            // Positive X is right, Positive Z is towards you (away from black back row)
+            const manualOffsetX = 0.0; // <-- Adjust e.g., -0.5, 1.0
+            const manualOffsetZ = 0.0; // <-- Adjust e.g., -0.5, 1.0
+            // --- End New Offsets ---
+
+            pieceMesh.position.set(
+                worldPos.x + manualOffsetX,  // Apply X offset
+                yPositionOffset + manualLift,
+                worldPos.z + manualOffsetZ   // Apply Z offset
+            );
+            // --- End Positioning ---
 
 
             // --- Logging for Debugging ---
@@ -224,6 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`  - Scale Applied: ${pieceScaleFactor}`);
             console.log(`  - Calculated Size: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`);
             console.log(`  - BBox Min Y: ${box.min.y.toFixed(2)}, Calculated Y Offset: ${yPositionOffset.toFixed(2)}, Manual Lift: ${manualLift}`);
+            console.log(`  - Manual X/Z Offset: x=${manualOffsetX.toFixed(2)}, z=${manualOffsetZ.toFixed(2)}`); // Log new offsets
             console.log(`  - Final Position: x=${pieceMesh.position.x.toFixed(2)}, y=${pieceMesh.position.y.toFixed(2)}, z=${pieceMesh.position.z.toFixed(2)}`);
             // --- End Logging ---
 
