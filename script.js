@@ -232,8 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- NEW: Manual X/Z Offsets ---
             // Adjust these values slightly if pieces are not centered on their squares
             // Positive X is right, Positive Z is towards you (away from black back row)
-            const manualOffsetX = 0.0; // <-- Adjust e.g., -0.5, 1.0
-            const manualOffsetZ = 0.0; // <-- Adjust e.g., -0.5, 1.0
+            const manualOffsetX = -1.0; // <-- Adjust e.g., -0.5, 1.0
+            const manualOffsetZ = -0.3; // <-- Adjust e.g., -0.5, 1.0
             // --- End New Offsets ---
 
             pieceMesh.position.set(
